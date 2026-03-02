@@ -1,0 +1,136 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %} Consumi {% endblock title %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="content-header">
+        <div class="container-fluid">
+            <h1 class="m-0">Gestione Consumi</h1>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <div class="row">
+                
+                <div class="col-md-6">
+                    <div class="card card-primary">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-bolt"></i> Consumi Elettrici</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data" class="mb-3">
+                                {% csrf_token %}
+                                <input type="hidden" name="tipo_consumo" value="elettrici">
+                                <div class="input-group">
+                                    <div class="custom-file">
+                                        <input type="file" name="file_excel" class="custom-file-input" id="inputEle" accept=".xlsx, .xls">
+                                        <label class="custom-file-label" for="inputEle">Carica Excel Elettricità</label>
+                                    </div>
+                                    <div class="input-group-append">
+                                        <button type="submit" class="btn btn-primary">Aggiorna</button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <div class="table-responsive" style="max-height: 400px;">
+                                <table class="table table-sm table-bordered table-striped">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            {% if dati_elettrici %}
+                                                {% for key in dati_elettrici.0.keys %}
+                                                    <th>{{ key }}</th>
+                                                {% endfor %}
+                                            {% else %}
+                                                <th>Info</th>
+                                            {% endif %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for riga in dati_elettrici %}
+                                            <tr>
+                                                {% for valore in riga.values %}
+                                                    <td>{{ valore }}</td>
+                                                {% endfor %}
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td class="text-center text-muted">Nessun dato salvato. Carica un file per iniziare.</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card card-success">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-gas-pump"></i> Consumi Benzina</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data" class="mb-3">
+                                {% csrf_token %}
+                                <input type="hidden" name="tipo_consumo" value="benzina">
+                                <div class="input-group">
+                                    <div class="custom-file">
+                                        <input type="file" name="file_excel" class="custom-file-input" id="inputBen" accept=".xlsx, .xls">
+                                        <label class="custom-file-label" for="inputBen">Carica Excel Benzina</label>
+                                    </div>
+                                    <div class="input-group-append">
+                                        <button type="submit" class="btn btn-success">Aggiorna</button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <div class="table-responsive" style="max-height: 400px;">
+                                <table class="table table-sm table-bordered table-striped">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            {% if dati_benzina %}
+                                                {% for key in dati_benzina.0.keys %}
+                                                    <th>{{ key }}</th>
+                                                {% endfor %}
+                                            {% else %}
+                                                <th>Info</th>
+                                            {% endif %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for riga in dati_benzina %}
+                                            <tr>
+                                                {% for valore in riga.values %}
+                                                    <td>{{ valore }}</td>
+                                                {% endfor %}
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td class="text-center text-muted">Nessun dato salvato. Carica un file per iniziare.</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script>
+    // Questo script serve per far apparire il nome del file nel campo di input dopo la selezione
+    $('.custom-file-input').on('change', function() {
+        let fileName = $(this).val().split('\\').pop();
+        $(this).next('.custom-file-label').addClass("selected").html(fileName);
+    });
+</script>
+{% endblock extra_scripts %}

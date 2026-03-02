@@ -1,0 +1,103 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %} PEMS Dashboard {% endblock title %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="content-header">
+        <div class="container-fluid">
+            <div class="row mb-2 align-items-center">
+                <div class="col-sm-6">
+                    <h1 class="m-0 text-bold text-primary">Analisi Energetica Pratolino</h1>
+                </div>
+                <div class="col-sm-6 text-right">
+                    <div class="btn-group">
+                        <a href="?period=D" class="btn btn-sm btn-outline-primary {% if periodo_attivo == 'D' %}active{% endif %}">Giorni</a>
+                        <a href="?period=ME" class="btn btn-sm btn-outline-primary {% if periodo_attivo == 'ME' %}active{% endif %}">Mesi</a>
+                        <a href="?period=YE" class="btn btn-sm btn-outline-primary {% if periodo_attivo == 'YE' %}active{% endif %}">Anni</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-lg-7">
+                    <div class="card card-primary card-outline">
+                        <div class="card-header border-0">
+                            <h3 class="card-title">Consumo Rete vs Produzione Solare (Wh)</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="energy-chart" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="card card-warning card-outline">
+                        <div class="card-header border-0">
+                            <h3 class="card-title">Working Hours per Asset</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="hours-chart" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script src="{% static 'plugins/chart.js/Chart.min.js' %}"></script>
+<script>
+  $(function () {
+    // Grafico Consumo vs Fotovoltaico (Dati Dario)
+    var ctx1 = document.getElementById('energy-chart').getContext('2d');
+    new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels: {{ labels_ele|safe }},
+        datasets: [
+          {
+            label: 'Consumo (Wh)',
+            data: {{ values_ele|safe }},
+            borderColor: '#007bff',
+            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+            fill: true,
+            tension: 0.3
+          },
+          {
+            label: 'Solare Stimato',
+            data: {{ values_fv|safe }},
+            borderColor: '#ffc107',
+            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+            fill: true,
+            tension: 0.3
+          }
+        ]
+      },
+      options: { maintainAspectRatio: false }
+    });
+
+    // Grafico Working Hours
+    var ctx2 = document.getElementById('hours-chart').getContext('2d');
+    new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: {{ labels_work|safe }},
+        datasets: [{
+          label: 'Ore di Lavoro',
+          data: {{ values_work|safe }},
+          backgroundColor: '#28a745'
+        }]
+      },
+      options: { maintainAspectRatio: false }
+    });
+  })
+</script>
+{% endblock extra_scripts %}
