@@ -7,7 +7,7 @@
 {% block content %}
 <div class="login-box">
   <div class="login-logo">
-    <a href="/"><b>Admin</b>LTE</a>
+    <a href="/"><b>DEMOS</b>PEMS</a>
   </div>
   <!-- /.login-logo -->
   <div class="card">
@@ -18,9 +18,9 @@
         {% csrf_token %}
 
         {% if form.non_field_errors %}
-          {% for error in form.non_field_errors  %}
-            <small class="text-danger mb-3">{{ error }}</small>
-          {% endfor %}
+        {% for error in form.non_field_errors %}
+        <small class="text-danger mb-3">{{ error }}</small>
+        {% endfor %}
         {% endif %}
 
         {% for field in form %}
@@ -64,11 +64,11 @@
       -->
       <!-- /.social-auth-links -->
 
-      <p class="mt-5 mb-2 text-center">
+      <!-- <p class="mt-5 mb-2 text-center">
         <a href="{% url 'password_reset' %}">Reset Pass</a>
         &bull;
         <a href="{% url 'register' %}" class="text-center">Sign UP</a>
-      </p>
+      </p> -->
     </div>
     <!-- /.login-card-body -->
   </div>

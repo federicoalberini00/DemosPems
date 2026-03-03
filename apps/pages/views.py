@@ -2,7 +2,9 @@ import pandas as pd
 import json
 from django.shortcuts import render
 import numpy as np
+from django.contrib.auth.decorators import login_required
 
+@login_required
 def economic_view(request):
     # Recupero dati dalle sessioni
     data_ele = request.session.get('dati_elettrici', [])
@@ -145,6 +147,7 @@ def economic_view(request):
     }
     return render(request, 'pages/economic.html', context)
 
+@login_required
 def co2_view(request):
     data_ele = request.session.get('dati_elettrici', [])
     data_gas = request.session.get('dati_benzina', [])
@@ -230,6 +233,7 @@ def co2_view(request):
         'data_pie': json.dumps([round(co2_gasolio, 1), round(co2_rete_reale, 1)])
     }
     return render(request, 'pages/co2.html', context)
+
 def get_filtered_df(data, date_col, val_col, request):
     """Filtra il DataFrame per date e raggruppa per frequenza"""
     if not data:
@@ -257,6 +261,8 @@ def get_filtered_df(data, date_col, val_col, request):
     return df, labels, agg_time.tolist()
 
 # --- 1. VISTA ELETTRICITÀ ---
+
+@login_required
 def electricity_view(request):
     data = request.session.get('dati_elettrici', [])
     area = float(request.GET.get('area_pannelli', 100))
@@ -284,6 +290,8 @@ def electricity_view(request):
     })
 
 # --- 2. VISTA GASOLIO ---
+
+@login_required
 def gas_view(request):
     data = request.session.get('dati_benzina', [])
     df, labels, values_gas = get_filtered_df(data, 'reference_date', 'consumption_in_l', request)
@@ -306,6 +314,8 @@ def gas_view(request):
     })
 
 # --- 3. VISTA WORKING HOURS ---
+
+@login_required
 def working_hours_view(request):
     data = request.session.get('dati_working_hours', [])
     # Preparazione ore prima del filtro
@@ -333,6 +343,7 @@ def working_hours_view(request):
         'end_date': request.GET.get('end_date', ''),
     })
 
+@login_required
 def tables_view(request):
     # Recupero dati completi dalle sessioni
     full_ele = request.session.get('dati_elettrici', [])
