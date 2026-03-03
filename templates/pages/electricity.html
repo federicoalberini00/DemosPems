@@ -1,0 +1,61 @@
+{% extends 'layouts/base.html' %}
+{% block content %}
+<div class="content-wrapper p-4">
+    <h4 class="text-bold text-dark mb-4"><i class="fas fa-bolt text-warning mr-2"></i>Analisi Vettore Elettrico</h4>
+    {% include 'includes/filter_bar.html' %}
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card card-outline card-primary shadow">
+                <div class="card-header border-0">
+                    <h3 class="card-title text-bold">Produzione Solare vs Consumo di Rete (Wh)</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="eleChart" style="height: 450px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    new Chart(document.getElementById('eleChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ labels| safe }},
+        datasets: [
+        {
+            label: 'Consumo Rete (Wh)',
+            data: {{ values_ele| safe }},
+        backgroundColor: '#4e73df',
+        order: 2 
+                },
+        {
+            label: 'Produzione Solare (Wh)',
+            data: {{ values_fv| safe }},
+        borderColor: '#f6c23e',
+        backgroundColor: 'rgba(246, 194, 62, 0.2)',
+        type: 'line',
+        fill: true,
+        order: 1,
+        tension: 0.3
+                }
+    ]
+        },
+        options: {
+        maintainAspectRatio: false,
+        interaction: {
+            intersect: false,
+            mode: 'index',
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: { display: true, text: 'Wh' }
+            }
+        }
+    }
+    });
+</script>
+{% endblock %}

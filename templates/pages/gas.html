@@ -1,0 +1,67 @@
+{% extends 'layouts/base.html' %}
+{% block content %}
+<div class="content-wrapper p-4">
+    <h4 class="text-bold mb-4"><i class="fas fa-gas-pump text-success mr-2"></i>Analisi Gasolio</h4>
+    {% include 'includes/filter_bar.html' %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card card-outline card-success shadow mb-4">
+                <div class="card-header border-0">
+                    <h3 class="card-title text-bold">Consumo nel Tempo (Litri)</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="gasTimeline" style="height: 350px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card card-success shadow mb-4">
+                <div class="card-header border-0">
+                    <h3 class="card-title text-bold">Distribuzione per Veicolo</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="gasPieChart" style="height: 350px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // 1. Timeline Temporale
+    new Chart(document.getElementById('gasTimeline'), {
+        type: 'bar',
+        data: {
+            labels: {{ labels| safe }},
+        datasets: [{
+            label: 'Litri Gasolio',
+            data: {{ values_gas| safe }},
+        backgroundColor: '#28a745'
+            }]
+        },
+        options: { maintainAspectRatio: false }
+    });
+
+    // 2. Grafico a Torta per Asset
+    new Chart(document.getElementById('gasPieChart'), {
+        type: 'pie',
+        data: {
+            labels: {{ labels_asset| safe }},
+        datasets: [{
+            data: {{ values_asset| safe }},
+        backgroundColor: [
+            '#28a745', '#20c997', '#218838', '#007bff', '#6610f2', '#e83e8c', '#fd7e14'
+        ]
+            }]
+        },
+        options: {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
+    }
+    });
+</script>
+{% endblock %}

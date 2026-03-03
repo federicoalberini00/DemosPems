@@ -1,31 +1,61 @@
-{% load i18n static admin_adminlte %}
+{% load i18n static %}
 
 <aside class="main-sidebar sidebar-dark-primary elevation-4">
   <a href="/" class="brand-link">
-    <!-- <img src="{% static 'dist/img/AdminLTELogo.png' %}" alt="AdminLTE Logo" class="brand-image img-circle elevation-3"
-      style="opacity: .8"> -->
-    <span class="brand-text font-weight-light">DEMOS</span>
+    <span class="brand-text font-weight-light text-uppercase ml-3" style="letter-spacing: 2px;">
+      <strong>DEMOS</strong> PEMS
+    </span>
   </a>
 
   <div class="sidebar">
     <nav class="mt-2">
       <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-        
+
+        <li class="nav-header text-uppercase small opacity-50">Configurazione</li>
         <li class="nav-item">
           <a href="/tables/" class="nav-link {% if 'tables' in request.path %} active {% endif %}">
-            <i class="nav-icon fas fa-table"></i>
-            <p>Tables</p>
+            <i class="nav-icon fas fa-upload"></i>
+            <p>Caricamento Dati</p>
           </a>
         </li>
+
+        <li class="nav-header text-uppercase small opacity-50">Analisi Vettori</li>
 
         <li class="nav-item">
           <a href="/" class="nav-link {% if request.path == '/' %} active {% endif %}">
-            <i class="nav-icon fas fa-chart-bar"></i>
-            <p>Results</p>
+            <i class="nav-icon fas fa-bolt text-warning"></i>
+            <p>Elettricità & Solare</p>
           </a>
         </li>
 
+        <li class="nav-item">
+          <a href="/gasolio/" class="nav-link {% if 'gasolio' in request.path %} active {% endif %}">
+            <i class="nav-icon fas fa-gas-pump text-success"></i>
+            <p>Consumo Gasolio</p>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a href="/working-hours/" class="nav-link {% if 'working-hours' in request.path %} active {% endif %}">
+            <i class="nav-icon fas fa-clock text-info"></i>
+            <p>Ore di Lavoro</p>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a href="/economic/" class="nav-link {% if 'economic' in request.path %} active {% endif %}">
+            <i class="nav-icon fas fa-coins text-success"></i>
+            <p>Analisi Economica</p>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a href="/co2/" class="nav-link {% if 'co2' in request.path %} active {% endif %}">
+            <i class="nav-icon fas fa-leaf text-success"></i>
+            <p>Analisi CO₂</p>
+          </a>
+        </li>
       </ul>
     </nav>
-    </div>
-  </aside>
+  </div>
+</aside>

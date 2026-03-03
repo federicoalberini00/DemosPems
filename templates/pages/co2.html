@@ -1,0 +1,122 @@
+{% extends 'layouts/base.html' %}
+{% block content %}
+<div class="content-wrapper p-4">
+    <h4 class="text-bold mb-4"><i class="fas fa-leaf text-success mr-2"></i>Analisi Impatto Ambientale (CO₂)</h4>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="small-box bg-dark shadow">
+                <div class="inner">
+                    <h3>{{ co2_totale_reale }} <small>kg</small></h3>
+                    <p>Emissioni Attuali (Con PV)</p>
+                </div>
+                <div class="icon"><i class="fas fa-smog"></i></div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="small-box bg-danger shadow">
+                <div class="inner">
+                    <h3>{{ co2_totale_potenziale }} <small>kg</small></h3>
+                    <p>Emissione Potenziale (Senza PV)</p>
+                </div>
+                <div class="icon"><i class="fas fa-exclamation-triangle"></i></div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="small-box bg-success shadow">
+                <div class="inner">
+                    <h3>{{ co2_risparmiata }} <small>kg</small></h3>
+                    <p>CO₂ Abbattuta dal Sole</p>
+                </div>
+                <div class="icon"><i class="fas fa-leaf"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="small-box bg-primary shadow">
+                <div class="inner">
+                    <h3>{{ alberi|floatformat:0 }} <small>Alberi</small></h3>
+                    <p>Equivalente assorbimento annuo di alberi piantati grazie al risparmio solare</p>
+                </div>
+                <div class="icon"><i class="fas fa-tree"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card shadow">
+                <div class="card-header border-0">
+                    <h3 class="card-title text-bold">Ripartizione Emissioni Attuali per Vettore</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="co2PieChart" style="height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card shadow">
+                <div class="card-header border-0 text-white bg-info">
+                    <h3 class="card-title text-bold">Dettaglio Calcolo Impronta</h3>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-unbordered">
+                        <li class="list-group-item">
+                            <b>Emissioni da Gasolio:</b> <span class="float-right text-bold">{{ co2_gas }} kg</span>
+                        </li>
+                        <li class="list-group-item">
+                            <b>Emissioni da Rete (Residue):</b> <span class="float-right text-bold">{{ co2_ele_reale }}
+                                kg</span>
+                        </li>
+                        <li class="list-group-item">
+                            <i class="small text-muted">Emissione Rete Teorica (Senza PV):</i>
+                            <span class="float-right text-muted small">{{ co2_ele_potenziale }} kg</span>
+                        </li>
+                        <li class="list-group-item text-success">
+                            <b>CO₂ Risparmiata Solare:</b> <span class="float-right text-bold">-{{ co2_risparmiata }}
+                                kg</span>
+                        </li>
+                    </ul>
+                    <hr>
+                    <div class="small text-muted">
+                        <p class="mb-1"><i class="fas fa-gas-pump mr-1"></i> <b>Litri totali:</b> {{ litri_totali }} L
+                        </p>
+                        <p class="mb-1"><i class="fas fa-bolt mr-1"></i> <b>kWh consumati:</b> {{ kwh_totali }} kWh</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    new Chart(document.getElementById('co2PieChart'), {
+        type: 'doughnut',
+        data: {
+            labels: {{ labels_pie| safe }},
+        datasets: [{
+            data: {{ data_pie| safe }},
+        backgroundColor: ['#343a40', '#4e73df'],
+        borderWidth: 5,
+        hoverOffset: 10
+            }]
+        },
+        options: {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { padding: 20, font: { weight: 'bold' } }
+            }
+        },
+        cutout: '70%'
+    }
+    });
+</script>
+{% endblock %}

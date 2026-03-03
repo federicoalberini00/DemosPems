@@ -1,0 +1,163 @@
+{% extends 'layouts/base.html' %}
+{% block content %}
+<div class="content-wrapper p-4">
+    <h4 class="text-bold mb-4"><i class="fas fa-euro-sign text-success mr-2"></i>Analisi Economica & Stagionale</h4>
+
+    <!-- <div class="card mb-4 shadow-sm border-0" style="background: #f4f6f9;">
+        <div class="card-body py-3">
+            <form method="GET" class="form-row align-items-end">
+                <div class="col-md-2">
+                    <label class="small font-weight-bold text-uppercase">Superficie (m²)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" step="0.1" name="area_pannelli" class="form-control"
+                            value="{{ area_pannelli|stringformat:'.1f' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="small font-weight-bold text-uppercase">Acquisto En. (€/kWh)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" step="0.01" name="prezzo_acquisto" class="form-control"
+                            value="{{ prezzo_acquisto|stringformat:'.2f' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="small font-weight-bold text-uppercase">Vendita En. (€/kWh)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" step="0.01" name="prezzo_vendita" class="form-control"
+                            value="{{ prezzo_vendita|stringformat:'.2f' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="small font-weight-bold text-uppercase">Prezzo Gasolio (€/L)</label>
+                    <div class="input-group input-group-sm">
+                        <div class="input-group-prepend"><span class="input-group-text"><i
+                                    class="fas fa-gas-pump"></i></span></div>
+                        <input type="number" step="0.01" name="prezzo_gasolio" class="form-control"
+                            value="{{ prezzo_gasolio|stringformat:'.2f' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary btn-sm btn-block">
+                        <i class="fas fa-sync-alt mr-1"></i> Ricalcola Bilancio
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div> -->
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="small-box bg-danger shadow">
+                <div class="inner">
+                    <h3>€ {{ total_cost }}</h3>
+                    <p>Spesa Elettricità (Rete)</p>
+                </div>
+                <div class="icon"><i class="fas fa-bolt"></i></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="small-box bg-success shadow">
+                <div class="inner">
+                    <h3>€ {{ total_gain }}</h3>
+                    <p>Guadagno Solare (Vendita)</p>
+                </div>
+                <div class="icon"><i class="fas fa-sun"></i></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="small-box bg-dark shadow">
+                <div class="inner">
+                    <h3>€ {{ total_gas_cost }}</h3>
+                    <p>Spesa Gasolio ({{ total_gas_liters }} L)</p>
+                </div>
+                <div class="icon"><i class="fas fa-gas-pump"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card card-primary card-outline shadow mb-4">
+        <div class="card-header border-0">
+            <h3 class="card-title text-bold">Media Giornaliera per Stagione (Wh)</h3>
+        </div>
+        <div class="card-body"><canvas id="seasonalChart" style="height: 300px;"></canvas></div>
+    </div>
+
+    <div class="row">
+        {% for stagione in stagioni_list %}
+        <div class="col-md-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header py-2 bg-light">
+                    <h3 class="card-title small text-bold">Profilo Orario: {{ stagione }}</h3>
+                </div>
+                <div class="card-body p-2">
+                    <canvas id="chart{{ stagione }}" style="height: 220px;"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // 1. Grafico Stagionale
+    new Chart(document.getElementById('seasonalChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ seasonal_labels| safe }},
+        datasets: [
+        { label: 'Consumo Medio', data: {{ seasonal_cons| safe }}, backgroundColor: '#4e73df' },
+        { label: 'Produzione Media', data: {{ seasonal_prod| safe }}, backgroundColor: '#f6c23e' }
+    ]
+        },
+        options: { maintainAspectRatio: false }
+    });
+
+    // 2. Grafici Profili Orari
+    const typicalData = {{ typical_days| safe }};
+    const hours = {{ hours| safe }};
+
+    ["Inverno", "Primavera", "Estate", "Autunno"].forEach(s => {
+        const ctx = document.getElementById('chart' + s);
+        if (ctx) {
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: hours,
+                    datasets: [
+                        {
+                            label: 'Consumo (Wh)',
+                            data: typicalData[s].cons,
+                            borderColor: '#4e73df',
+                            backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                            fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+                        },
+                        {
+                            label: 'Produzione (Wh)',
+                            data: typicalData[s].solar,
+                            borderColor: '#f6c23e',
+                            backgroundColor: 'rgba(246, 194, 62, 0.2)',
+                            fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 10 } } }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                        y: { beginAtZero: true, ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

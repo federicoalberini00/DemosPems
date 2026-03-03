@@ -1,0 +1,70 @@
+{% extends 'layouts/base.html' %}
+{% block content %}
+<div class="content-wrapper p-4">
+    <h4 class="text-bold mb-4"><i class="fas fa-clock text-info mr-2"></i>Analisi Ore di Lavoro</h4>
+    {% include 'includes/filter_bar.html' %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card card-outline card-info shadow mb-4">
+                <div class="card-header border-0">
+                    <h3 class="card-title text-bold">Andamento Ore Totali</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="workTimeline" style="height: 350px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card card-info shadow mb-4">
+                <div class="card-header border-0">
+                    <h3 class="card-title text-bold">Quota Utilizzo Veicoli</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="workPieChart" style="height: 350px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // 1. Timeline Temporale
+    new Chart(document.getElementById('workTimeline'), {
+        type: 'line',
+        data: {
+            labels: {{ labels| safe }},
+        datasets: [{
+            label: 'Ore di Lavoro',
+            data: {{ values_hours| safe }},
+        borderColor: '#17a2b8',
+        backgroundColor: 'rgba(23, 162, 184, 0.1)',
+        fill: true,
+        tension: 0.3
+            }]
+        },
+        options: { maintainAspectRatio: false }
+    });
+
+    // 2. Grafico a Torta per Asset
+    new Chart(document.getElementById('workPieChart'), {
+        type: 'pie',
+        data: {
+            labels: {{ labels_asset| safe }},
+        datasets: [{
+            data: {{ values_asset| safe }},
+        backgroundColor: [
+            '#17a2b8', '#117a8b', '#007bff', '#6610f2', '#e83e8c', '#dc3545', '#fd7e14'
+        ]
+            }]
+        },
+        options: {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
+    }
+    });
+</script>
+{% endblock %}

@@ -1,20 +1,76 @@
 {% extends 'layouts/base.html' %}
 {% load static %}
 
-{% block title %} Consumi {% endblock title %}
+{% block title %} Gestione Dati PEMS {% endblock title %}
 
 {% block content %}
 <div class="content-wrapper">
     <div class="content-header">
         <div class="container-fluid">
-            <h1 class="m-0">Gestione Consumi</h1>
+            <h1 class="m-0">Caricamento e Gestione Dati</h1>
         </div>
     </div>
 
     <section class="content">
         <div class="container-fluid">
+
+            <div class="card card-dark shadow-sm mb-4">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-cog mr-2"></i> Configurazione Parametri Economici e Tecnici
+                    </h3>
+                </div>
+                <div class="card-body bg-light">
+                    <form method="GET" class="row align-items-end">
+                        <div class="col-md-2">
+                            <label class="small font-weight-bold text-uppercase">Superficie fotovoltaica (m²)</label>
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend"><span class="input-group-text"><i
+                                            class="fas fa-th"></i></span></div>
+                                <input type="number" step="0.1" name="area_pannelli" class="form-control"
+                                    value="{{ area_pannelli|stringformat:'.1f' }}">
+                            </div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="small font-weight-bold text-uppercase">Acquisto En. (€/kWh)</label>
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend"><span class="input-group-text"><i
+                                            class="fas fa-arrow-down text-danger"></i></span></div>
+                                <input type="number" step="0.01" name="prezzo_acquisto" class="form-control"
+                                    value="{{ prezzo_acquisto|stringformat:'.2f' }}">
+                            </div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="small font-weight-bold text-uppercase">Vendita En. (€/kWh)</label>
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend"><span class="input-group-text"><i
+                                            class="fas fa-arrow-up text-success"></i></span></div>
+                                <input type="number" step="0.01" name="prezzo_vendita" class="form-control"
+                                    value="{{ prezzo_vendita|stringformat:'.2f' }}">
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="small font-weight-bold text-uppercase">Prezzo Gasolio (€/L)</label>
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend"><span class="input-group-text"><i
+                                            class="fas fa-gas-pump"></i></span></div>
+                                <input type="number" step="0.01" name="prezzo_gasolio" class="form-control"
+                                    value="{{ prezzo_gasolio|stringformat:'.2f' }}">
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-dark btn-sm btn-block">
+                                <i class="fas fa-save mr-1"></i> Salva Configurazione
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <div class="row">
-                
                 <div class="col-md-6">
                     <div class="card card-primary">
                         <div class="card-header">
@@ -26,39 +82,29 @@
                                 <input type="hidden" name="tipo_consumo" value="elettrici">
                                 <div class="input-group">
                                     <div class="custom-file">
-                                        <input type="file" name="file_excel" class="custom-file-input" id="inputEle" accept=".xlsx, .xls">
-                                        <label class="custom-file-label" for="inputEle">Carica Excel Elettricità</label>
+                                        <input type="file" name="file_excel" class="custom-file-input">
+                                        <label class="custom-file-label">Excel Elettricità</label>
                                     </div>
-                                    <div class="input-group-append">
-                                        <button type="submit" class="btn btn-primary">Aggiorna</button>
-                                    </div>
+                                    <div class="input-group-append"><button type="submit"
+                                            class="btn btn-primary">Carica</button></div>
                                 </div>
                             </form>
-
-                            <div class="table-responsive" style="max-height: 400px;">
-                                <table class="table table-sm table-bordered table-striped">
-                                    <thead class="thead-dark">
+                            <div class="table-responsive" style="max-height: 300px;">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
                                         <tr>
                                             {% if dati_elettrici %}
-                                                {% for key in dati_elettrici.0.keys %}
-                                                    <th>{{ key }}</th>
-                                                {% endfor %}
-                                            {% else %}
-                                                <th>Info</th>
+                                            {% for key in dati_elettrici.0.keys %}<th>{{ key }}</th>{% endfor %}
                                             {% endif %}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {% for riga in dati_elettrici %}
-                                            <tr>
-                                                {% for valore in riga.values %}
-                                                    <td>{{ valore }}</td>
-                                                {% endfor %}
-                                            </tr>
+                                        {% for r in dati_elettrici %}
+                                        <tr>{% for v in r.values %}<td>{{ v }}</td>{% endfor %}</tr>
                                         {% empty %}
-                                            <tr>
-                                                <td class="text-center text-muted">Nessun dato salvato. Carica un file per iniziare.</td>
-                                            </tr>
+                                        <tr>
+                                            <td class="text-center text-muted">Nessun dato elettrico</td>
+                                        </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
@@ -70,7 +116,7 @@
                 <div class="col-md-6">
                     <div class="card card-success">
                         <div class="card-header">
-                            <h3 class="card-title"><i class="fas fa-gas-pump"></i> Consumi Benzina</h3>
+                            <h3 class="card-title"><i class="fas fa-gas-pump"></i> Consumi Gasolio</h3>
                         </div>
                         <div class="card-body">
                             <form method="post" enctype="multipart/form-data" class="mb-3">
@@ -78,39 +124,29 @@
                                 <input type="hidden" name="tipo_consumo" value="benzina">
                                 <div class="input-group">
                                     <div class="custom-file">
-                                        <input type="file" name="file_excel" class="custom-file-input" id="inputBen" accept=".xlsx, .xls">
-                                        <label class="custom-file-label" for="inputBen">Carica Excel Benzina</label>
+                                        <input type="file" name="file_excel" class="custom-file-input">
+                                        <label class="custom-file-label">Excel Gasolio</label>
                                     </div>
-                                    <div class="input-group-append">
-                                        <button type="submit" class="btn btn-success">Aggiorna</button>
-                                    </div>
+                                    <div class="input-group-append"><button type="submit"
+                                            class="btn btn-success">Carica</button></div>
                                 </div>
                             </form>
-
-                            <div class="table-responsive" style="max-height: 400px;">
-                                <table class="table table-sm table-bordered table-striped">
-                                    <thead class="thead-dark">
+                            <div class="table-responsive" style="max-height: 300px;">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
                                         <tr>
                                             {% if dati_benzina %}
-                                                {% for key in dati_benzina.0.keys %}
-                                                    <th>{{ key }}</th>
-                                                {% endfor %}
-                                            {% else %}
-                                                <th>Info</th>
+                                            {% for key in dati_benzina.0.keys %}<th>{{ key }}</th>{% endfor %}
                                             {% endif %}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {% for riga in dati_benzina %}
-                                            <tr>
-                                                {% for valore in riga.values %}
-                                                    <td>{{ valore }}</td>
-                                                {% endfor %}
-                                            </tr>
+                                        {% for r in dati_benzina %}
+                                        <tr>{% for v in r.values %}<td>{{ v }}</td>{% endfor %}</tr>
                                         {% empty %}
-                                            <tr>
-                                                <td class="text-center text-muted">Nessun dato salvato. Carica un file per iniziare.</td>
-                                            </tr>
+                                        <tr>
+                                            <td class="text-center text-muted">Nessun dato benzina</td>
+                                        </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
@@ -118,7 +154,50 @@
                         </div>
                     </div>
                 </div>
+            </div>
 
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card card-warning">
+                        <div class="card-header">
+                            <h3 class="card-title text-dark"><i class="fas fa-clock"></i> Ore di Lavoro</h3>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data" class="mb-3">
+                                {% csrf_token %}
+                                <input type="hidden" name="tipo_consumo" value="working_hours">
+                                <div class="input-group">
+                                    <div class="custom-file">
+                                        <input type="file" name="file_excel" class="custom-file-input">
+                                        <label class="custom-file-label">Excel Ore di lavoro</label>
+                                    </div>
+                                    <div class="input-group-append"><button type="submit"
+                                            class="btn btn-warning">Carica</button></div>
+                                </div>
+                            </form>
+                            <div class="table-responsive" style="max-height: 300px;">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
+                                        <tr>
+                                            {% if dati_working_hours %}
+                                            {% for key in dati_working_hours.0.keys %}<th>{{ key }}</th>{% endfor %}
+                                            {% endif %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for r in dati_working_hours %}
+                                        <tr>{% for v in r.values %}<td>{{ v }}</td>{% endfor %}</tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td class="text-center text-muted">Nessun dato ore di lavoro</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -127,8 +206,8 @@
 
 {% block extra_scripts %}
 <script>
-    // Questo script serve per far apparire il nome del file nel campo di input dopo la selezione
-    $('.custom-file-input').on('change', function() {
+    // Mostra il nome del file scelto
+    $('.custom-file-input').on('change', function () {
         let fileName = $(this).val().split('\\').pop();
         $(this).next('.custom-file-label').addClass("selected").html(fileName);
     });
