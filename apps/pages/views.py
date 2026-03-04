@@ -1,10 +1,10 @@
 import pandas as pd
 import json
-from django.shortcuts import render
+from django.shortcuts import render,redirect
 import numpy as np
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-
+from django.contrib import messages
 @login_required
 def export_results_excel(request):
     tipo = request.GET.get('type', 'economica')
@@ -149,37 +149,15 @@ def economic_view(request):
     data_ele = request.session.get('dati_elettrici', [])
     data_gas = request.session.get('dati_benzina', [])
     
-    area_input = request.session.get('area_pannelli', 3000)
-    acquisto_input = request.session.get('prezzo_acquisto', 0.10)
-    vendita_input = request.session.get('prezzo_vendita', 0.05)
-    gasolio_input = request.session.get('prezzo_gasolio', 1.75)
-
-    if area_input not in [None, '']:
-        area = float(area_input)
-        request.session['area_pannelli'] = area
-    else:
-        area = request.session.get('area_pannelli', 3000)
-
-    if acquisto_input not in [None, '']:
-        prezzo_acquisto = float(acquisto_input)
-        request.session['prezzo_acquisto'] = prezzo_acquisto
-    else:
-        prezzo_acquisto = request.session.get('prezzo_acquisto', 0.10)
-
-    if vendita_input not in [None, '']:
-        prezzo_vendita = float(vendita_input)
-        request.session['prezzo_vendita'] = prezzo_vendita
-    else:
-        prezzo_vendita = request.session.get('prezzo_vendita', 0.05)
-
-    if gasolio_input not in [None, '']:
-        prezzo_gasolio = float(gasolio_input)
-        request.session['prezzo_gasolio'] = prezzo_gasolio
-    else:
-        prezzo_gasolio = request.session.get('prezzo_gasolio', 1.75)
+    # Recupero parametri (come nel tuo codice originale)
+    area = float(request.session.get('area_pannelli', 3000))
+    prezzo_acquisto = float(request.session.get('prezzo_acquisto', 0.10))
+    prezzo_vendita = float(request.session.get('prezzo_vendita', 0.05))
+    prezzo_gasolio = float(request.session.get('prezzo_gasolio', 1.75))
 
     request.session.modified = True
 
+    # Calcolo Gasolio (rimane invariato perché è già in litri)
     total_gas_liters = 0
     total_gas_cost = 0
     if data_gas:
@@ -201,19 +179,22 @@ def economic_view(request):
     df = pd.DataFrame(data_ele)
     df['Date'] = pd.to_datetime(df['Date'])
     
+    # TRASFORMAZIONE: Raggruppiamo e convertiamo immediatamente in kWh (/1000)
     daily_df = df.groupby(df['Date'].dt.date).agg({'Consumption (Wh)': 'sum'}).reset_index()
+    daily_df['Consumption (kWh)'] = daily_df['Consumption (Wh)'] / 1000
     daily_df['Date'] = pd.to_datetime(daily_df['Date'])
     
     hours = list(range(24))
     
-    def get_solar_h(daily_total):
+    # Funzioni di profilo aggiornate per lavorare in kWh
+    def get_solar_h(daily_total_kwh):
         curve = [max(0, np.sin((h-6)*np.pi/14)) if 6 <= h <= 20 else 0 for h in hours]
-        factor = daily_total / sum(curve) if sum(curve) > 0 else 0
+        factor = daily_total_kwh / sum(curve) if sum(curve) > 0 else 0
         return [float(c * factor) for c in curve]
 
-    def get_cons_h(daily_total):
-        base = (daily_total * 0.20) / 24
-        work = (daily_total * 0.80) / 10
+    def get_cons_h(daily_total_kwh):
+        base = (daily_total_kwh * 0.20) / 24
+        work = (daily_total_kwh * 0.80) / 10
         return [float(work + base if 8 <= h <= 18 else base) for h in hours]
 
     def get_irr(m):
@@ -227,39 +208,45 @@ def economic_view(request):
     EFF, PR = 0.18, 0.75
 
     for _, row in daily_df.iterrows():
-        d_solar = get_irr(row['Date'].month) * area * EFF * PR
-        d_cons = row['Consumption (Wh)']
-        s_profile = get_solar_h(d_solar)
-        c_profile = get_cons_h(d_cons)
+        # Calcolo produzione giornaliera direttamente in kWh
+        d_solar_kwh = (get_irr(row['Date'].month) * area * EFF * PR) / 1000
+        d_cons_kwh = row['Consumption (kWh)']
+        
+        s_profile = get_solar_h(d_solar_kwh)
+        c_profile = get_cons_h(d_cons_kwh)
         
         for s, c in zip(s_profile, c_profile):
+            # Calcolo costi (s e c sono già in kWh, quindi non dividiamo più per 1000 qui)
             if s > c: 
-                total_gain_period += ((s - c) / 1000) * prezzo_vendita
+                total_gain_period += (s - c) * prezzo_vendita
             else: 
-                total_cost_period += ((c - s) / 1000) * prezzo_acquisto
+                total_cost_period += (c - s) * prezzo_acquisto
 
+    # Statistiche stagionali in kWh
     daily_df['Stagione'] = daily_df['Date'].dt.month.map(lambda m: 
         'Inverno' if m in [12,1,2] else 'Primavera' if m in [3,4,5] else 'Estate' if m in [6,7,8] else 'Autunno')
     
-    seasonal_stats = daily_df.groupby('Stagione')['Consumption (Wh)'].mean()
+    seasonal_stats = daily_df.groupby('Stagione')['Consumption (kWh)'].mean()
     stagioni_list = ['Inverno', 'Primavera', 'Estate', 'Autunno']
     typical_days = {}
 
     for stag in stagioni_list:
-        media_c = seasonal_stats.get(stag, 0)
+        media_c_kwh = seasonal_stats.get(stag, 0)
         m_ref = {'Inverno': 1, 'Primavera': 4, 'Estate': 7, 'Autunno': 10}[stag]
-        teorico_s = get_irr(m_ref) * area * EFF * PR
+        teorico_s_kwh = (get_irr(m_ref) * area * EFF * PR) / 1000
+        
         typical_days[stag] = {
-            'solar': get_solar_h(teorico_s),
-            'cons': get_cons_h(media_c)
+            'solar': get_solar_h(teorico_s_kwh),
+            'cons': get_cons_h(media_c_kwh)
         }
 
     context = {
         'segment': 'economic',
         'stagioni_list': stagioni_list,
         'seasonal_labels': json.dumps(stagioni_list),
+        # Dati passati ai grafici ora in kWh
         'seasonal_cons': json.dumps([float(seasonal_stats.get(s, 0)) for s in stagioni_list]),
-        'seasonal_prod': json.dumps([float(get_irr({'Inverno': 1, 'Primavera': 4, 'Estate': 7, 'Autunno': 10}[s]) * area * EFF * PR) for s in stagioni_list]),
+        'seasonal_prod': json.dumps([float((get_irr({'Inverno': 1, 'Primavera': 4, 'Estate': 7, 'Autunno': 10}[s]) * area * EFF * PR) / 1000) for s in stagioni_list]),
         'total_cost': round(float(total_cost_period), 2),
         'total_gain': round(float(total_gain_period), 2),
         'total_gas_cost': round(float(total_gas_cost), 2),
@@ -388,23 +375,41 @@ def get_filtered_df(data, date_col, val_col, request):
 def electricity_view(request):
     data = request.session.get('dati_elettrici', [])
     area = float(request.session.get('area_pannelli', 3000))
-    df, labels, values_ele = get_filtered_df(data, 'Date', 'Consumption (Wh)', request)
+    freq = request.GET.get('freq', 'D') # Recuperiamo la frequenza (D, W, M)
     
+    df, labels, values_ele_wh = get_filtered_df(data, 'Date', 'Consumption (Wh)', request)
+    values_ele = [val / 1000 for val in values_ele_wh]
     values_fv = []
     for label in labels:
-        m = pd.to_datetime(label).month
+        dt = pd.to_datetime(label)
+        m = dt.month
         if m in [12, 1, 2]: irr = 789.7
         elif m in [3, 4, 5]: irr = 2756.6
         elif m in [6, 7, 8]: irr = 5676.7
         else: irr = 2748.9
-        values_fv.append(irr * area * 0.18 * 0.75)
+        
+        prod_giornaliera = irr * area * 0.18 * 0.75 / 1000
+
+        if freq == 'ME':
+            giorni_nel_periodo = df[
+                (df['Date'].dt.month == dt.month) & 
+                (df['Date'].dt.year == dt.year)
+            ]['Date'].dt.date.nunique()
+            if giorni_nel_periodo == 0:
+                giorni_nel_periodo = dt.days_in_month
+        elif freq == 'W':
+            giorni_nel_periodo = 7
+        else:
+            giorni_nel_periodo = 1
+            
+        values_fv.append(prod_giornaliera * giorni_nel_periodo)
 
     return render(request, 'pages/electricity.html', {
         'segment': 'electricity',
         'labels': json.dumps(labels),
         'values_ele': json.dumps(values_ele),
         'values_fv': json.dumps(values_fv),
-        'current_freq': request.GET.get('freq', 'D'),
+        'current_freq': freq,
         'start_date': request.GET.get('start_date', ''),
         'end_date': request.GET.get('end_date', ''),
         'area_pannelli': area
@@ -504,17 +509,20 @@ def working_hours_view(request):
 
 @login_required
 def tables_view(request):
-    full_ele = request.session.get('dati_elettrici', [])
-    full_gas = request.session.get('dati_benzina', [])
-    full_wh = request.session.get('dati_working_hours', [])
+    # --- LOGICA DI PULIZIA DATI ---
+    if request.method == 'POST' and 'pulisci_tipo' in request.POST:
+        tipo_da_pulire = request.POST.get('pulisci_tipo')
+        key_map = {
+            'elettrici': 'dati_elettrici', 
+            'benzina': 'dati_benzina', 
+            'working_hours': 'dati_working_hours'
+        }
+        if tipo_da_pulire in key_map:
+            request.session[key_map[tipo_da_pulire]] = []
+            request.session.modified = True
+        return redirect('tables')
 
-    if request.method == 'GET':
-        for param in ['area_pannelli', 'prezzo_acquisto', 'prezzo_vendita', 'prezzo_gasolio']:
-            val = request.GET.get(param)
-            if val not in [None, '']:
-                request.session[param] = float(val)
-        request.session.modified = True
-
+    # --- LOGICA DI CARICAMENTO ---
     if request.method == 'POST' and request.FILES.get('file_excel'):
         file = request.FILES['file_excel']
         tipo = request.POST.get('tipo_consumo')
@@ -531,9 +539,23 @@ def tables_view(request):
                 request.session[key_map[tipo]] = dict_data
             
             request.session.modified = True
-            return redirect('tables')
+            # FIX: Il redirect forza il refresh immediato dei dati a video
+            return redirect('tables') 
         except Exception as e:
             print(f"Errore: {e}")
+            return redirect('tables')
+
+    # --- RESTO DELLA VIEW ---
+    if request.method == 'GET':
+        for param in ['area_pannelli', 'prezzo_acquisto', 'prezzo_vendita', 'prezzo_gasolio']:
+            val = request.GET.get(param)
+            if val not in [None, '']:
+                request.session[param] = float(val)
+        request.session.modified = True
+
+    full_ele = request.session.get('dati_elettrici', [])
+    full_gas = request.session.get('dati_benzina', [])
+    full_wh = request.session.get('dati_working_hours', [])
 
     context = {
         'segment': 'tables',

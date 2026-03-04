@@ -26,13 +26,13 @@
             labels: {{ labels| safe }},
         datasets: [
         {
-            label: 'Consumo Rete (Wh)',
+            label: 'Consumo Rete (kWh)',
             data: {{ values_ele| safe }},
         backgroundColor: '#4e73df',
         order: 2 
                 },
         {
-            label: 'Produzione Solare (Wh)',
+            label: 'Produzione Solare (kWh)',
             data: {{ values_fv| safe }},
         borderColor: '#f6c23e',
         backgroundColor: 'rgba(246, 194, 62, 0.2)',
@@ -52,7 +52,7 @@
         scales: {
             y: {
                 beginAtZero: true,
-                title: { display: true, text: 'Wh' }
+                title: { display: true, text: 'kWh' }
             }
         }
     }
