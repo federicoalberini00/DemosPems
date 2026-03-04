@@ -12,4 +12,5 @@ urlpatterns = [
     path('co2/', views.co2_view, name='co2_analysis'),
     path('login/', auth_views.LoginView.as_view(template_name='pages/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+    path('export-excel/', views.export_results_excel, name='export_excel'),
 ]

@@ -3,41 +3,175 @@ import json
 from django.shortcuts import render
 import numpy as np
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+
+@login_required
+def export_results_excel(request):
+    tipo = request.GET.get('type', 'economica')
+    data_ele = request.session.get('dati_elettrici', [])
+    data_gas = request.session.get('dati_benzina', [])
+    area = float(request.session.get('area_pannelli', 3000))
+    
+    # Parametri economici dalla sessione
+    p_acquisto = float(request.session.get('prezzo_acquisto', 0.10))
+    p_vendita = float(request.session.get('prezzo_vendita', 0.05))
+    p_gasolio = float(request.session.get('prezzo_gasolio', 1.75))
+    
+    KG_CO2_KWH = 0.28   
+    KG_CO2_LITRO = 2.68  
+    EFF, PR = 0.18, 0.75
+    hours = list(range(24))
+
+    if not data_ele:
+        return HttpResponse("Dati elettrici mancanti.", status=400)
+
+    # 1. Calcolo Gasolio (Litri e Costo)
+    litri_totali = 0
+    if data_gas:
+        df_gas = pd.DataFrame(data_gas)
+        litri_totali = pd.to_numeric(df_gas['consumption_in_l'], errors='coerce').sum()
+    
+    spesa_gasolio_totale = litri_totali * p_gasolio
+    co2_gasolio_totale = litri_totali * KG_CO2_LITRO
+
+    # 2. Elaborazione Dati Elettrici (Profili Orari per precisione millesimale)
+    df = pd.DataFrame(data_ele)
+    df['Date'] = pd.to_datetime(df['Date'])
+    daily_df = df.groupby(df['Date'].dt.date).agg({'Consumption (Wh)': 'sum'}).reset_index()
+    daily_df['Date'] = pd.to_datetime(daily_df['Date'])
+    
+    def get_solar_h(daily_t):
+        curve = [max(0, np.sin((h-6)*np.pi/14)) if 6 <= h <= 20 else 0 for h in hours]
+        f = daily_t / sum(curve) if sum(curve) > 0 else 0
+        return [c * f for c in curve]
+
+    def get_cons_h(daily_t):
+        b = (daily_t * 0.20) / 24
+        w = (daily_t * 0.80) / 10
+        return [w + b if 8 <= h <= 18 else b for h in hours]
+
+    results = []
+    for _, row in daily_df.iterrows():
+        m = row['Date'].month
+        irr = {12:789.7, 1:789.7, 2:789.7, 3:2756.6, 4:2756.6, 5:2756.6, 6:5676.7, 7:5676.7, 8:5676.7}.get(m, 2748.9)
+        
+        prod_gg = irr * area * EFF * PR
+        cons_gg = row['Consumption (Wh)']
+        
+        s_prof = get_solar_h(prod_gg)
+        c_prof = get_cons_h(cons_gg)
+        
+        costo_gg, guadagno_gg, co2_potenziale_gg, co2_rete_reale_gg, co2_risp_gg = 0, 0, 0, 0, 0
+        
+        for s, c in zip(s_prof, c_prof):
+            co2_potenziale_gg += (c / 1000) * KG_CO2_KWH
+            co2_risp_gg += (s / 1000) * KG_CO2_KWH
+            
+            if c > s:
+                costo_gg += ((c - s) / 1000) * p_acquisto
+                co2_rete_reale_gg += ((c - s) / 1000) * KG_CO2_KWH
+            else:
+                guadagno_gg += ((s - c) / 1000) * p_vendita
+
+        if tipo == 'economica':
+            results.append({
+                'Data': row['Date'].strftime('%d/%m/%Y'),
+                'Costo Prelievo Rete (€)': costo_gg,
+                'Guadagno Vendita PV (€)': guadagno_gg,
+            })
+        else:
+            results.append({
+                'Data': row['Date'].strftime('%d/%m/%Y'),
+                'CO2 Potenziale No PV (kg)': co2_potenziale_gg,
+                'CO2 Rete Residua (kg)': co2_rete_reale_gg,
+                'CO2 Abbattuta PV (kg)': co2_risp_gg
+            })
+
+    # 4. Creazione DataFrame Export dai risultati giornalieri
+    df_export = pd.DataFrame(results)
+    numeric_cols = df_export.select_dtypes(include=[np.number]).columns
+    totals = df_export[numeric_cols].sum()
+
+    # Inizializziamo la lista per le righe di riepilogo
+    extra_rows = []
+
+    if tipo == 'economica':
+        # 1. Totale Parziale Rete (mostra tutti i totali di colonna)
+        rete_row = {col: totals[col] for col in numeric_cols}
+        rete_row['Data'] = 'TOTALE PARZIALE RETE'
+        extra_rows.append(rete_row)
+        
+        # 2. Totale Spesa Gasolio (SOLO valore nella prima colonna numerica, le altre vuote)
+        gas_row = {col: "" for col in numeric_cols} # Inizializza tutte le colonne come vuote
+        gas_row['Data'] = 'TOTALE SPESA GASOLIO'
+        gas_row['Costo Prelievo Rete (€)'] = spesa_gasolio_totale
+        extra_rows.append(gas_row)
+        
+        # 3. Totale Generale (SOLO somma finale nella prima colonna, le altre vuote)
+        summary_row = {col: "" for col in numeric_cols}
+        summary_row['Data'] = 'TOTALE GENERALE (RETE + GASOLIO)'
+        summary_row['Costo Prelievo Rete (€)'] = totals['Costo Prelievo Rete (€)'] + spesa_gasolio_totale
+        extra_rows.append(summary_row)
+
+    else:
+        # Logica per Report CO2
+        # 1. Totale Parziale Elettrico
+        rete_co2_row = {col: totals[col] for col in numeric_cols}
+        rete_co2_row['Data'] = 'TOTALE PARZIALE RETE'
+        extra_rows.append(rete_co2_row)
+
+        # 2. Emissioni Gasolio (Solo colonna Rete Residua)
+        gas_co2_row = {col: "" for col in numeric_cols}
+        gas_co2_row['Data'] = 'EMISSIONI GASOLIO'
+        gas_co2_row['CO2 Rete Residua (kg)'] = co2_gasolio_totale
+        extra_rows.append(gas_co2_row)
+        
+        # 3. Emissioni Totali Reali (Solo colonna Rete Residua)
+        summary_co2_row = {col: "" for col in numeric_cols}
+        summary_co2_row['Data'] = 'EMISSIONI TOTALI REALI'
+        summary_co2_row['CO2 Rete Residua (kg)'] = totals['CO2 Rete Residua (kg)'] + co2_gasolio_totale
+        extra_rows.append(summary_co2_row)
+
+    # Aggiunta delle righe al DataFrame
+    if extra_rows:
+        df_export = pd.concat([df_export, pd.DataFrame(extra_rows)], ignore_index=True)
+
+    # 5. Generazione File Excel
+    filename = f"Analisi_{tipo}_PEMS.xlsx"
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    
+    df_export.to_excel(response, index=False, engine='openpyxl')
+    return response
 
 @login_required
 def economic_view(request):
-    # Recupero dati dalle sessioni
     data_ele = request.session.get('dati_elettrici', [])
     data_gas = request.session.get('dati_benzina', [])
     
-    # --- 1. GESTIONE INPUT E SESSIONE (Persistenza parametri) ---
     area_input = request.session.get('area_pannelli', 3000)
     acquisto_input = request.session.get('prezzo_acquisto', 0.10)
     vendita_input = request.session.get('prezzo_vendita', 0.05)
     gasolio_input = request.session.get('prezzo_gasolio', 1.75)
 
-    # Logica AREA
     if area_input not in [None, '']:
         area = float(area_input)
         request.session['area_pannelli'] = area
     else:
         area = request.session.get('area_pannelli', 3000)
 
-    # Logica PREZZO ACQUISTO ENERGIA
     if acquisto_input not in [None, '']:
         prezzo_acquisto = float(acquisto_input)
         request.session['prezzo_acquisto'] = prezzo_acquisto
     else:
         prezzo_acquisto = request.session.get('prezzo_acquisto', 0.10)
 
-    # Logica PREZZO VENDITA ENERGIA
     if vendita_input not in [None, '']:
         prezzo_vendita = float(vendita_input)
         request.session['prezzo_vendita'] = prezzo_vendita
     else:
         prezzo_vendita = request.session.get('prezzo_vendita', 0.05)
 
-    # Logica PREZZO GASOLIO
     if gasolio_input not in [None, '']:
         prezzo_gasolio = float(gasolio_input)
         request.session['prezzo_gasolio'] = prezzo_gasolio
@@ -46,16 +180,13 @@ def economic_view(request):
 
     request.session.modified = True
 
-    # --- 2. CALCOLO GASOLIO ---
     total_gas_liters = 0
     total_gas_cost = 0
     if data_gas:
         df_gas = pd.DataFrame(data_gas)
-        # Somma della colonna litri gestendo eventuali valori non numerici
         total_gas_liters = pd.to_numeric(df_gas['consumption_in_l'], errors='coerce').sum()
         total_gas_cost = total_gas_liters * prezzo_gasolio
 
-    # Se non ci sono dati elettrici, mostriamo comunque la pagina con i KPI del gasolio
     if not data_ele:
         return render(request, 'pages/economic.html', {
             'segment': 'economic', 
@@ -67,11 +198,9 @@ def economic_view(request):
             'total_gas_liters': round(float(total_gas_liters), 2),
         })
 
-    # --- 3. ELABORAZIONE DATI ELETTRICI ---
     df = pd.DataFrame(data_ele)
     df['Date'] = pd.to_datetime(df['Date'])
     
-    # Raggruppamento Giornaliero per totali reali
     daily_df = df.groupby(df['Date'].dt.date).agg({'Consumption (Wh)': 'sum'}).reset_index()
     daily_df['Date'] = pd.to_datetime(daily_df['Date'])
     
@@ -88,13 +217,11 @@ def economic_view(request):
         return [float(work + base if 8 <= h <= 18 else base) for h in hours]
 
     def get_irr(m):
-        # Dati irraggiamento Dario
         if m in [12, 1, 2]: return 789.7
         if m in [3, 4, 5]: return 2756.6
         if m in [6, 7, 8]: return 5676.7
         return 2748.9
 
-    # --- 4. CALCOLO ECONOMICO ELETTRICO ---
     total_cost_period = 0
     total_gain_period = 0
     EFF, PR = 0.18, 0.75
@@ -111,7 +238,6 @@ def economic_view(request):
             else: 
                 total_cost_period += ((c - s) / 1000) * prezzo_acquisto
 
-    # --- 5. PREPARAZIONE GRAFICI ---
     daily_df['Stagione'] = daily_df['Date'].dt.month.map(lambda m: 
         'Inverno' if m in [12,1,2] else 'Primavera' if m in [3,4,5] else 'Estate' if m in [6,7,8] else 'Autunno')
     
@@ -147,6 +273,7 @@ def economic_view(request):
     }
     return render(request, 'pages/economic.html', context)
 
+
 @login_required
 def co2_view(request):
     data_ele = request.session.get('dati_elettrici', [])
@@ -160,17 +287,15 @@ def co2_view(request):
     if not data_ele and not data_gas:
         return render(request, 'pages/co2.html', {'segment': 'co2'})
 
-    # --- 1. GASOLIO ---
     litri_totali = 0
     if data_gas:
         df_gas = pd.DataFrame(data_gas)
         litri_totali = pd.to_numeric(df_gas['consumption_in_l'], errors='coerce').sum()
     co2_gasolio = litri_totali * KG_CO2_LITRO
 
-    # --- 2. ELETTRICITÀ ---
-    co2_rete_reale = 0          # Quello che emetti davvero oggi (prelievo notturno/picchi)
-    co2_potenziale_senza_pv = 0 # Quello che emetteresti senza pannelli
-    co2_risparmiata_solare = 0  # Il beneficio totale del sole
+    co2_rete_reale = 0
+    co2_potenziale_senza_pv = 0
+    co2_risparmiata_solare = 0
     kwh_consumati_totali = 0
 
     if data_ele:
@@ -198,23 +323,23 @@ def co2_view(request):
             
             prod_gg = irr * area * EFF * PR
             cons_gg = row['Consumption (Wh)']
-            
-            # 1. Emissioni Potenziali: se non avessi il PV, emetteresti tutto questo
-            co2_potenziale_senza_pv += (cons_gg / 1000) * KG_CO2_KWH
             kwh_consumati_totali += cons_gg / 1000
             
             s_prof = get_solar_h(prod_gg)
             c_prof = get_cons_h(cons_gg)
             
             for s, c in zip(s_prof, c_prof):
+                # 1. Base di confronto: CO2 che emetteresti con il profilo ricostruito
+                co2_potenziale_senza_pv += (c / 1000) * KG_CO2_KWH 
+                
+                # 2. Emissione reale: Solo quello che prelevi dalla rete (dove C > S)
                 if c > s:
-                    # 2. Emissioni Reali: solo la parte non coperta dal sole
                     co2_rete_reale += ((c - s) / 1000) * KG_CO2_KWH
                 
-                # 3. Risparmio Solare Totale
+                # 3. CO2 Risparmiata: Tutta la produzione solare del profilo (S)
                 co2_risparmiata_solare += (s / 1000) * KG_CO2_KWH
 
-    # Calcolo totale "Senza Impianto" vs "Con Impianto"
+    # Calcolo totali includendo il gasolio
     emissioni_totali_senza_pv = co2_gasolio + co2_potenziale_senza_pv
     emissioni_totali_reali = co2_gasolio + co2_rete_reale
 
@@ -242,7 +367,6 @@ def get_filtered_df(data, date_col, val_col, request):
     df = pd.DataFrame(data)
     df[date_col] = pd.to_datetime(df[date_col])
     
-    # 1. Filtro Intervallo Date
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     if start_date:
@@ -253,19 +377,17 @@ def get_filtered_df(data, date_col, val_col, request):
     if df.empty:
         return df, [], []
 
-    # 2. Raggruppamento Temporale
     freq = request.GET.get('freq', 'D')
     agg_time = df.resample(freq, on=date_col)[val_col].sum().fillna(0)
     labels = [d.strftime('%Y-%m-%d') for d in agg_time.index]
     
     return df, labels, agg_time.tolist()
 
-# --- 1. VISTA ELETTRICITÀ ---
 
 @login_required
 def electricity_view(request):
     data = request.session.get('dati_elettrici', [])
-    area = float(request.GET.get('area_pannelli', 100))
+    area = float(request.session.get('area_pannelli', 3000))
     df, labels, values_ele = get_filtered_df(data, 'Date', 'Consumption (Wh)', request)
     
     values_fv = []
@@ -275,7 +397,6 @@ def electricity_view(request):
         elif m in [3, 4, 5]: irr = 2756.6
         elif m in [6, 7, 8]: irr = 5676.7
         else: irr = 2748.9
-        # Wh = irr * area * eff * pr
         values_fv.append(irr * area * 0.18 * 0.75)
 
     return render(request, 'pages/electricity.html', {
@@ -289,16 +410,34 @@ def electricity_view(request):
         'area_pannelli': area
     })
 
-# --- 2. VISTA GASOLIO ---
 
 @login_required
 def gas_view(request):
     data = request.session.get('dati_benzina', [])
-    df, labels, values_gas = get_filtered_df(data, 'reference_date', 'consumption_in_l', request)
+    asset_filter = request.GET.get('asset') # Recupera il filtro dal dropdown
+    asset_list = []
+
+    if data:
+        df_base = pd.DataFrame(data)
+        # Estrae la lista dei veicoli per il dropdown
+        asset_list = sorted(df_base['asset_name'].unique().tolist())
+        
+        # Applica il filtro se selezionato
+        if asset_filter:
+            data_to_process = df_base[df_base['asset_name'] == asset_filter].to_dict(orient='records')
+        else:
+            data_to_process = data
+    else:
+        data_to_process = []
+
+    # Elaborazione dati filtrati per il grafico temporale
+    df, labels, values_gas = get_filtered_df(data_to_process, 'reference_date', 'consumption_in_l', request)
     
+    # Calcolo ripartizione per asset (Grafico a barre sempre visibile)
     labels_asset, values_asset = [], []
-    if not df.empty:
-        agg_asset = df.groupby('asset_name')['consumption_in_l'].sum().sort_values(ascending=False)
+    if data:
+        full_df = pd.DataFrame(data)
+        agg_asset = full_df.groupby('asset_name')['consumption_in_l'].sum().sort_values(ascending=False)
         labels_asset = list(agg_asset.index)
         values_asset = [round(float(x), 2) for x in agg_asset.values]
 
@@ -308,27 +447,45 @@ def gas_view(request):
         'values_gas': json.dumps(values_gas),
         'labels_asset': json.dumps(labels_asset),
         'values_asset': json.dumps(values_asset),
+        'asset_list': asset_list,
+        'current_asset': asset_filter,
         'current_freq': request.GET.get('freq', 'D'),
         'start_date': request.GET.get('start_date', ''),
         'end_date': request.GET.get('end_date', ''),
     })
 
-# --- 3. VISTA WORKING HOURS ---
 
 @login_required
 def working_hours_view(request):
     data = request.session.get('dati_working_hours', [])
-    # Preparazione ore prima del filtro
+    asset_filter = request.GET.get('asset')
+    asset_list = []
+
     if data:
         df_base = pd.DataFrame(data)
+        # Lista veicoli per dropdown
+        asset_list = sorted(df_base['asset_name'].unique().tolist())
+        
+        # Conversione secondi in ore
         df_base['hours'] = pd.to_numeric(df_base['working_time_seconds'], errors='coerce') / 3600
-        data = df_base.to_dict(orient='records')
+        
+        # Filtro asset
+        if asset_filter:
+            df_base = df_base[df_base['asset_name'] == asset_filter]
+            
+        data_to_process = df_base.to_dict(orient='records')
+    else:
+        data_to_process = []
 
-    df, labels, values_hours = get_filtered_df(data, 'reference_date', 'hours', request)
+    # Elaborazione per grafico temporale
+    df, labels, values_hours = get_filtered_df(data_to_process, 'reference_date', 'hours', request)
     
+    # Riassunto per asset (Grafico a barre)
     labels_asset, values_asset = [], []
-    if not df.empty:
-        agg_asset = df.groupby('asset_name')['hours'].sum().sort_values(ascending=False)
+    if data:
+        full_df = pd.DataFrame(data)
+        full_df['hours'] = pd.to_numeric(full_df['working_time_seconds'], errors='coerce') / 3600
+        agg_asset = full_df.groupby('asset_name')['hours'].sum().sort_values(ascending=False)
         labels_asset = list(agg_asset.index)
         values_asset = [round(float(x), 2) for x in agg_asset.values]
 
@@ -338,6 +495,8 @@ def working_hours_view(request):
         'values_hours': json.dumps(values_hours),
         'labels_asset': json.dumps(labels_asset),
         'values_asset': json.dumps(values_asset),
+        'asset_list': asset_list,
+        'current_asset': asset_filter,
         'current_freq': request.GET.get('freq', 'D'),
         'start_date': request.GET.get('start_date', ''),
         'end_date': request.GET.get('end_date', ''),
@@ -345,12 +504,10 @@ def working_hours_view(request):
 
 @login_required
 def tables_view(request):
-    # Recupero dati completi dalle sessioni
     full_ele = request.session.get('dati_elettrici', [])
     full_gas = request.session.get('dati_benzina', [])
     full_wh = request.session.get('dati_working_hours', [])
 
-    # --- GESTIONE PARAMETRI ECONOMICI (GET) ---
     if request.method == 'GET':
         for param in ['area_pannelli', 'prezzo_acquisto', 'prezzo_vendita', 'prezzo_gasolio']:
             val = request.GET.get(param)
@@ -358,7 +515,6 @@ def tables_view(request):
                 request.session[param] = float(val)
         request.session.modified = True
 
-    # --- CARICAMENTO EXCEL (POST) ---
     if request.method == 'POST' and request.FILES.get('file_excel'):
         file = request.FILES['file_excel']
         tipo = request.POST.get('tipo_consumo')
@@ -375,17 +531,15 @@ def tables_view(request):
                 request.session[key_map[tipo]] = dict_data
             
             request.session.modified = True
-            # Ricarichiamo i dati appena salvati per la preview
-            return redirect('tables') # Assicurati che il nome della url sia 'tables'
+            return redirect('tables')
         except Exception as e:
             print(f"Errore: {e}")
 
-    # --- LOGICA LIGHT: Slicing per il template ---
     context = {
         'segment': 'tables',
-        'dati_elettrici': full_ele[:5],  # Solo 5 righe per la velocità
-        'dati_benzina': full_gas[:5],    # Solo 5 righe per la velocità
-        'dati_working_hours': full_wh[:5],# Solo 5 righe per la velocità
+        'dati_elettrici': full_ele[:5],
+        'dati_benzina': full_gas[:5],
+        'dati_working_hours': full_wh[:5],
         'count_ele': len(full_ele),
         'count_gas': len(full_gas),
         'count_wh': len(full_wh),

@@ -1,4 +1,6 @@
 {% extends 'layouts/auth_base.html' %}
+{% load static %}
+
 
 {% block title %} Log in {% endblock title %}
 
@@ -6,8 +8,13 @@
 
 {% block content %}
 <div class="login-box">
-  <div class="login-logo">
-    <a href="/"><b>DEMOS</b>PEMS</a>
+  <div class="login-logo" style="line-height: 1.2;">
+    <a href="/" style="text-decoration: none; color: #495057;">
+        <b>DEMOS</b>PEMS<br>
+        <span style="font-size: 18px; font-weight: 300; display: block; margin-top: -5px; margin-bottom: 5px;">by</span>
+        <img src="{% static 'img/Logo.png' %}" alt="Logo PEMS" style="max-width: 150px; height: auto; display: inline-block;">
+        <img src="{% static 'img/Logo_UNIGE.jpg' %}" alt="Logo UNIGE" style="max-width: 50px; height: auto; display: inline-block;">
+    </a>
   </div>
   <!-- /.login-logo -->
   <div class="card">
